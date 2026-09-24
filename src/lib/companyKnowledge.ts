@@ -1018,6 +1018,156 @@ export const GENERIC_DOMAIN: GeneratedQuestion[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Anduril
+// ---------------------------------------------------------------------------
+
+// Public candidate reports vary by role, but repeatedly point toward mission
+// fit, project deep dives, coding plus design, clearance eligibility, and
+// real-time/edge systems. These are practice prompts, not claims that Anduril
+// asks every candidate the exact questions below.
+const ANDURIL_CURATED: GeneratedQuestion[] = [
+  {
+    category: "CODING",
+    title: "Reconstruct an out-of-order sensor track",
+    difficulty: "MEDIUM",
+    prompt:
+      "An edge vehicle receives observations as tuples `(asset_id, timestamp_ms, x, y, sequence)`. Packets can arrive out of order and a retransmission can repeat a timestamp. Implement `reconstruct(events) -> dict[str, list[tuple[int, float, float]]]`: group observations by asset, keep the observation with the greatest sequence for each timestamp, and return each track sorted by timestamp. Explain how your approach behaves when a radio link delivers a burst of delayed packets.",
+    testCases: [
+      {
+        input:
+          '[("A", 300, 3.0, 3.0, 1), ("A", 100, 1.0, 1.0, 1), ("A", 100, 9.0, 9.0, 2)]',
+        expected: '{"A": [[100, 9.0, 9.0], [300, 3.0, 3.0]]}',
+        explanation: "The later sequence replaces the duplicate timestamp.",
+      },
+      {
+        input: '[("B", 20, 2.0, 4.0, 1), ("A", 10, 1.0, 2.0, 1)]',
+        expected: '{"A": [[10, 1.0, 2.0]], "B": [[20, 2.0, 4.0]]}',
+        explanation: "Assets are independent and each output track is time ordered.",
+      },
+    ],
+    solution:
+      "Maintain a nested map `tracks[asset_id][timestamp_ms] = (sequence, x, y)`. For each event, replace the stored value only when its sequence is greater. Finally, sort each asset's map items by timestamp and remove the sequence field from the returned tuples. Processing is O(n + sum(k_i log k_i)) for n events and k_i distinct timestamps per asset; storage is O(n). In a real system, the same state would be bounded by a retention window and checkpointed so a reconnect cannot grow memory without limit.",
+  },
+  {
+    category: "CODING",
+    title: "Schedule non-expired mission messages",
+    difficulty: "MEDIUM",
+    prompt:
+      "A disconnected vehicle queues outbound messages. Each message is `(id, priority, expires_at_ms, sequence)`. Implement `drain_queue(messages, now_ms, capacity) -> list[str]` that drops expired messages and returns at most `capacity` IDs in descending priority order, breaking ties by earliest expiry and then lowest sequence. State the invariant that makes the result deterministic across reconnects.",
+    testCases: [
+      {
+        input:
+          'messages=[("map", 1, 500, 2), ("abort", 10, 900, 3), ("stale", 99, 100, 1)], now_ms=200, capacity=2',
+        expected: '["abort", "map"]',
+        explanation: "The stale message is expired before priority ordering.",
+      },
+      {
+        input:
+          'messages=[("a", 2, 400, 5), ("b", 2, 300, 4), ("c", 2, 300, 2)], now_ms=100, capacity=3',
+        expected: '["c", "b", "a"]',
+        explanation: "Tie-breaking is expiry, then sequence.",
+      },
+    ],
+    solution:
+      "Filter with `expires_at_ms > now_ms`, then sort by `(-priority, expires_at_ms, sequence)` and take the first `capacity` entries. In production, retain the same ordering key in the durable queue and make message IDs idempotent, so replay after an intermittent connection cannot reorder or duplicate a safety-critical command. Complexity is O(n log n), or O(n log capacity) with a bounded heap.",
+  },
+  {
+    category: "BEHAVIORAL",
+    title: "Choosing a mission tradeoff with incomplete information",
+    difficulty: "MEDIUM",
+    prompt:
+      "Tell me about a time you had to choose between shipping a useful capability quickly and waiting for a more complete or safer solution. Explain the mission or customer impact, what evidence you gathered, what risk you accepted, and how you created a rollback or follow-up plan.",
+    testCases: [],
+    solution:
+      "Use STAR, but make the tradeoff concrete: describe the user or mission outcome, name the unsafe shortcut you rejected, show the smallest measurable version you shipped, and explain the guardrails (feature flag, canary, simulation, monitoring, or rollback). A strong answer does not claim that speed always wins; it shows how you made risk visible and kept the decision reversible.",
+  },
+  {
+    category: "BEHAVIORAL",
+    title: "Working through a hardware-software disagreement",
+    difficulty: "MEDIUM",
+    prompt:
+      "Describe a disagreement with a hardware, firmware, test, or operations partner about a system behavior or deadline. How did you turn the disagreement into an experiment or shared requirement, and what changed because of the result?",
+    testCases: [],
+    solution:
+      "Cover the interface contract, not just the interpersonal conflict. State the competing constraints, write down the measurable acceptance criteria, run a small test or collect field data, and make the decision explicit. End with how you preserved the relationship and changed the process so the same integration issue would be found earlier.",
+  },
+  {
+    category: "SYSTEM_DESIGN",
+    title: "Design disconnected-first vehicle telemetry and command",
+    difficulty: "HARD",
+    prompt:
+      "Design a telemetry and command platform for a fleet of autonomous vehicles operating over unreliable links. Vehicles must continue a safe local mission when disconnected, upload observations when bandwidth returns, and receive prioritized commands without replaying a command twice. Cover the edge agent, event ordering, durable queues, security, observability, and operator-facing consistency.",
+    testCases: [
+      {
+        input: "A vehicle is offline for 30 minutes and reconnects with 200,000 observations.",
+        expected: "Bounded local retention, resumable upload, backpressure, batching, and an explicit loss policy.",
+        explanation: "The design must survive reconnect bursts without blocking control traffic.",
+      },
+      {
+        input: "The same high-priority command is delivered three times after retries.",
+        expected: "Signed idempotent command IDs, durable deduplication, expiry, and an audited acknowledgement state.",
+        explanation: "Retries must not turn at-least-once delivery into repeated action.",
+      },
+    ],
+    solution:
+      "Separate safety-critical local control from best-effort cloud synchronization. The edge agent writes telemetry to a bounded append-only queue with sequence numbers, compresses and uploads resumable ranges, and gives command traffic a reserved link budget. Commands carry an expiry, monotonic ID, signature, and idempotency key; the vehicle persists the last accepted IDs before acknowledging. The cloud stores an immutable event log plus materialized fleet views, while operators see freshness and connectivity explicitly instead of stale data as current truth. Discuss key rotation, offline authorization limits, clock drift, retention, backpressure, and what happens when storage or the radio is full.",
+  },
+  {
+    category: "SYSTEM_DESIGN",
+    title: "Design safe OTA updates for edge systems",
+    difficulty: "HARD",
+    prompt:
+      "Design an OTA update service for software deployed to intermittently connected edge systems. Updates must be staged by fleet, verifiable before activation, reversible after a bad health signal, and safe when a device loses power during installation. Cover artifact distribution, compatibility, rollout policy, health checks, rollback, and auditability.",
+    testCases: [
+      {
+        input: "Five percent of a canary fleet reports increased CPU and missed deadlines.",
+        expected: "Pause rollout, compare against baseline, quarantine the version, and roll back or hold safely.",
+        explanation: "A rollout must react to fleet health instead of only installation success.",
+      },
+      {
+        input: "Power fails halfway through an update.",
+        expected: "A/B or transactional partitions, signed artifacts, boot-success markers, and automatic fallback.",
+        explanation: "The device must remain recoverable without a live link.",
+      },
+    ],
+    solution:
+      "Use signed, content-addressed artifacts with a manifest containing version, compatibility constraints, and rollback metadata. Devices download in the background with resume and verify the signature/hash before writing an inactive A/B partition. A bootloader activates only after an atomic slot switch; the new process must report health within a deadline or the bootloader reverts. The control plane rolls out by cohorts, pauses on statistically significant regressions, and keeps an immutable audit trail of target, approval, device acknowledgement, health, and rollback state. Include staged config migrations and backwards-compatible wire protocols so mixed versions can coexist.",
+  },
+  {
+    category: "DOMAIN",
+    title: "Keeping a real-time C++ service within a p99 budget",
+    difficulty: "HARD",
+    prompt:
+      "A C++ edge service meets its average latency target but misses its p99 deadline during sensor bursts. Explain how you would investigate and fix it. Cover allocations, lock contention, queueing, scheduler behavior, priority inversion, logging, and how you would prove the fix did not reduce correctness.",
+    testCases: [
+      {
+        input: "Average latency 4 ms, p99 latency 80 ms, target p99 <= 20 ms.",
+        expected: "Measure the tail with tracing and load replay; identify queue/lock/allocation causes instead of optimizing the average.",
+        explanation: "Tail latency is usually a contention or queueing problem.",
+      },
+    ],
+    solution:
+      "Start with timestamped spans around acquisition, decode, fusion, decision, and output, and replay a burst workload with the same scheduling and message sizes. Look for unbounded queues, allocator pauses, mutex contention, priority inversion, page faults, synchronous logging, and CPU migration. Typical fixes include bounded queues with an explicit drop/degrade policy, preallocated object pools, single-writer or lock-free handoff where justified, priority inheritance, batching outside the deadline-critical path, and rate-limited logging. Compare p50/p95/p99/p999, deadline-miss count, CPU/cache metrics, and domain-level correctness before and after.",
+  },
+  {
+    category: "DOMAIN",
+    title: "Sensor fusion when clocks and packets disagree",
+    difficulty: "HARD",
+    prompt:
+      "Two sensors report the same object using different clocks, coordinate frames, and confidence values. Describe a robust edge-side fusion pipeline that handles clock skew, late packets, duplicate observations, coordinate transforms, and conflicting tracks. Include the failure modes you would surface to an operator.",
+    testCases: [
+      {
+        input: "Sensor A reports a high-confidence position 100 ms late; sensor B reports a lower-confidence position at current time.",
+        expected: "Align timestamps, propagate or smooth state with uncertainty, and avoid blindly replacing the current estimate.",
+        explanation: "Freshness and confidence must be combined, not compared independently.",
+      },
+    ],
+    solution:
+      "Normalize every observation into a monotonic event-time domain with an estimated clock offset and uncertainty. Validate frame/calibration metadata, transform into a common frame, deduplicate by sensor sequence, and use a bounded lateness window. Maintain a state estimate plus covariance (for example a Kalman-family filter where appropriate), propagate the state to the query time, and fuse measurements weighted by uncertainty rather than a single confidence scalar. Late data can be applied as a bounded smoothing correction or discarded with a metric when the window closes. Surface clock drift, calibration age, innovation/residual spikes, track fragmentation, and stale-data age so operators know when the estimate is degraded.",
+  },
+];
+
+// ---------------------------------------------------------------------------
 // Registry
 // ---------------------------------------------------------------------------
 
@@ -1032,6 +1182,7 @@ export const companyProfiles: CompanyProfile[] = [
   { name: "Anthropic", domains: ["LLM reasoning & evaluation", "safety & alignment", "RLHF / RL", "distributed training", "interpretability"], focusAreas: ["Alignment: RLHF, Constitutional AI, RLAIF, DPO", "Evaluation: evals platforms, EM/F1, LLM-as-judge, contamination", "LLM internals: attention, KV cache, tokenization", "Distributed training: ZeRO, pipeline/tensor parallelism", "Honesty and update-on-evidence behavioral style"], curated: ANTHROPIC_CURATED },
   { name: "Tesla", domains: ["embedded C/C++", "real-time systems", "computer vision / sensor fusion", "Autopilot & FSD", "battery & powertrain"], focusAreas: ["Autopilot/FSD perception: cameras, NNs, fusion, planning, latency budgets", "Embedded and real-time firmware: WCET, deterministic behavior", "OTA update and staged rollout design", "Cross-discipline integration (HW/FW/SW)", "Safety-critical validation and simulation"], curated: TESLA_CURATED },
   { name: "Databricks", domains: ["Apache Spark", "data lakehouse", "distributed query engines", "Scala / Java", "Delta Lake"], focusAreas: ["Spark: lazy evaluation, lineage, shuffles, partitioning", "Query engines: planning, execution, broadcast vs sort-merge joins", "Lakehouse: Delta Lake ACID, schema evolution, time travel", "Distributed computing patterns and fault tolerance", "Data engineering performance and data quality"], curated: DATABRICKS_CURATED },
+  { name: "Anduril", domains: ["defense technology", "autonomous systems", "real-time C++", "edge computing", "sensor fusion", "reliable robotics"], focusAreas: ["Mission-driven behavioral answers and decision-making under uncertainty", "Public interview reports vary by role: recruiter mission/clearance discussion, project deep dive, coding plus design, and occasional SQL/data exercises", "Disconnected-first command, telemetry, and fleet synchronization", "OTA updates, rollback, observability, and safe operation at the edge", "Real-time performance, sensor fusion, time synchronization, and bounded resources"], curated: ANDURIL_CURATED },
 ];
 
 /** Names used for the "quick add" suggestions in the add-company form. */

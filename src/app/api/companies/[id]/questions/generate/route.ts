@@ -5,6 +5,7 @@ import { profileFor } from "@/lib/companyKnowledge";
 import { execSpecForTitle } from "@/lib/practice/specs";
 import type { GeneratedQuestion } from "@/lib/llm/types";
 import type { ExecSpec } from "@/lib/exec/types";
+import { z } from "zod";
 
 /**
  * Attach the codepad configuration for a generated question:
@@ -35,10 +36,25 @@ function serializeExecSpec(question: GeneratedQuestion): string | null {
 
 type Params = { params: { id: string } };
 
-export async function POST(_request: Request, { params }: Params) {
+const generateRequestSchema = z.object({
+  /**
+   * Optional one-request override from the generation dialog. It is never
+   * persisted; the server only passes it to the provider call.
+   */
+  openAIKey: z.string().trim().max(300).optional(),
+  provider: z.enum(["curated", "openai"]).optional(),
+});
+
+export async function POST(request: Request, { params }: Params) {
   const company = await prisma.company.findUnique({ where: { id: params.id } });
   if (!company) {
     return NextResponse.json({ error: "Company not found." }, { status: 404 });
+  }
+
+  const body = await request.json().catch(() => null);
+  const parsed = generateRequestSchema.safeParse(body ?? {});
+  if (!parsed.success) {
+    return NextResponse.json({ error: "The OpenAI API key is too long." }, { status: 400 });
   }
 
   const profile = profileFor(company.name);
@@ -50,6 +66,9 @@ export async function POST(_request: Request, { params }: Params) {
       role: company.role,
       domains: profile?.domains ?? [],
       focusAreas: profile?.focusAreas ?? [],
+    }, {
+      openAIKey: parsed.data.openAIKey || undefined,
+      provider: parsed.data.provider,
     });
   } catch (error) {
     const message =
@@ -73,6 +92,10 @@ export async function POST(_request: Request, { params }: Params) {
           solution: q.solution,
           status: "TODO",
           source: generated.source,
+          researchSources:
+            q.researchSources && q.researchSources.length > 0
+              ? JSON.stringify(q.researchSources)
+              : null,
           sortOrder: i,
           execSpec: serializeExecSpec(q),
           testCases: {

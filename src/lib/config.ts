@@ -24,6 +24,9 @@ export const CONFIG = {
   /** OpenAI model used by the "openai" provider. */
   openaiModel: env.OPENAI_MODEL?.trim() || "gpt-4o-mini",
 
+  /** Model used for the optional live interview-report research pass. */
+  openaiResearchModel: env.OPENAI_RESEARCH_MODEL?.trim() || "gpt-4.1",
+
   /**
    * Provider selection mode:
    *  - "auto"    -> OpenAI if OPENAI_API_KEY is set, else built-in curated questions
@@ -34,6 +37,15 @@ export const CONFIG = {
 
   /** Whether an OpenAI API key is present. */
   hasOpenAIKey: Boolean(env.OPENAI_API_KEY?.trim()),
+
+  /**
+   * Search public web sources before OpenAI question generation. This only has
+   * an effect when an OpenAI key is configured; curated mode stays offline.
+   */
+  webResearchEnabled: bool(env.OPENAI_WEB_RESEARCH, true),
+
+  /** Maximum research text passed into the question-generation prompt. */
+  maxResearchChars: int(env.MAX_RESEARCH_CHARS, 16_000, 4_000, 40_000),
 
   /** Show the "how to extend" hints on the dashboard (nice in local dev). */
   showExtras: bool(env.SHOW_EXTRAS, true),

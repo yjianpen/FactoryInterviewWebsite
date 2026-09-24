@@ -37,7 +37,8 @@ For runnable coding questions, choose **Practice in editor** to open the CodePad
 Out of the box the app uses the **curated offline generator**: hand-written,
 company-specific questions for NVIDIA, OpenAI, Google, Meta, Amazon, Apple,
 Microsoft, Anthropic, Tesla and Databricks, plus solid generic pools for any other
-company. No network, no key, free.
+company. No network, no key, free. The generation dialog also offers this
+curated fallback explicitly.
 
 ### With an OpenAI key (tailored AI questions)
 
@@ -45,11 +46,23 @@ company. No network, no key, free.
 # .env
 OPENAI_API_KEY="sk-..."
 OPENAI_MODEL="gpt-4o-mini"      # cheap + good
+OPENAI_RESEARCH_MODEL="gpt-4.1" # live interview-report research
+OPENAI_WEB_RESEARCH="true"
 QUESTION_PROVIDER="auto"        # auto: openai when key present, else curated
 ```
 
 `QUESTION_PROVIDER` accepts `auto | openai | curated`. The OpenAI output is
 validated with zod before touching the database and retried once on malformed JSON.
+When an OpenAI key is present and `OPENAI_WEB_RESEARCH` is enabled, generation
+first searches recent public interview reports. It prioritizes Reddit, Blind,
+1Point3Acres, and other public interview-report sources, then supplies the
+research brief to the question generator. The resulting question cards show the
+source links under **Research sources**.
+
+The generation dialog also accepts a one-time OpenAI key. It is sent only with
+that request and is never saved in SQLite, local storage, or the generated
+question set. Leave it blank, or choose **Use curated fallback**, to use the
+offline path. Only enter a key over localhost or a trusted HTTPS deployment.
 
 ## Project layout
 
@@ -69,6 +82,7 @@ src/
   components/                   # UI building blocks (RSC islands + client cards)
   lib/
     companyKnowledge.ts          # profiles + curated questions per company
+    research.ts                  # live public interview-report research
     llm/                         # pluggable question generators
       types.ts                   # LLMProvider contract + zod validation
       curated.ts                 # offline generator
@@ -88,13 +102,19 @@ prisma/schema.prisma             # Company, Question, TestCase
    Known companies get their domain profile + curated questions. Unknown companies
    fall back to the generic pools.
 3. **Generate** resolves the provider from config:
-   - no key → curated generator returns profile questions (padded from generic pools)
-   - key present → OpenAI generates questions from a prompt that includes the
+   - no server or dialog key → curated generator returns profile questions (padded from generic pools)
+   - server or dialog key present → OpenAI generates questions from a prompt that includes the
      company profile, its domain focus areas and the role; results are zod-validated.
 4. The set replaces the previous one for that company (transactional), with
-   `source: "curated" | "openai"` and stable `sortOrder`.
+   `source: "curated" | "openai" | "openai-web"` and stable `sortOrder`.
 5. The question list never contains solutions; the client fetches
    `GET /api/questions/:id` only when you click "Show me the solution".
+
+For OpenAI generation, the first pass searches current public interview reports
+for the company and role. The second pass turns that evidence into questions and
+labels the set **AI + web research**. Search results are treated as untrusted
+source material, not instructions, and exact-question claims are only made when
+the reports support them.
 
 ## CodePad
 
@@ -128,6 +148,10 @@ MAX_RUN_OUTPUT_CHARS=64000    # per stream; allowed range: 2000–500000
 `POST /api/questions/:id/run` also limits submitted code to 100 KB. The
 `GET /api/status` response reports whether execution is enabled and which
 runtimes were detected.
+
+Live interview research uses OpenAI web search and adds search/tool cost to
+generation. Set `OPENAI_WEB_RESEARCH=false` to disable it, or use
+`QUESTION_PROVIDER=curated` for a completely offline generator.
 
 The runner uses a temporary working directory, a minimal environment, output
 limits, and a wall-clock timeout. This is **process-level containment, not a
@@ -182,11 +206,13 @@ Current posture: **local single-user app**. Before exposing it publicly:
   who can reach the server can read/write your data.
 - **HTTPS**: terminate TLS at a proxy (Caddy/nginx/Cloudflare) or a platform's
   managed TLS. Never serve plain HTTP with auth cookies.
-- **Secrets**: `OPENAI_API_KEY` lives in `.env` (gitignored) and is read
-  server-side only. It never leaves the server; verify no client bundle contains it
-  (`grep -r sk- .next/` after a build).
+- **Secrets**: the server-side `OPENAI_API_KEY` lives in `.env` (gitignored) and
+  is never included in a client bundle. A key typed into the generation dialog is
+  transient, but still requires localhost or trusted HTTPS. Never paste keys into
+  shared or untrusted deployments.
 - **Rate limiting**: add per-user rate limits to `POST /api/...` (generation calls
-  spend your OpenAI budget); e.g. `@upstash/ratelimit` or a simple in-DB token bucket.
+  spend your OpenAI budget and live research adds another billable call);
+  e.g. `@upstash/ratelimit` or a simple in-DB token bucket.
 - **Code execution**: do not expose `/api/questions/:id/run` publicly without a
   sandbox, authentication, resource limits, and rate limiting. The local runner
   is not sufficient isolation for untrusted users.
@@ -215,7 +241,7 @@ npm run verify:practice # exercise checked harnesses against a running app
 ## Data model
 
 - `Company` — name (unique), role, stage (`APPLIED|PREP|INTERVIEWING|OFFER|REJECTED`), notes
-- `Question` — company, category, title, prompt, difficulty, solution (markdown), status (`TODO|PRACTICING|MASTERED`), source, optional CodePad execution spec
+- `Question` — company, category, title, prompt, difficulty, solution (markdown), status (`TODO|PRACTICING|MASTERED`), source, research source links, optional CodePad execution spec
 - `TestCase` — input, expected, explanation, hidden (reserved for autograding later)
 
 Deleting a company cascades to its questions and test cases.
