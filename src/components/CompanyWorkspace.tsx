@@ -4,9 +4,14 @@ import { useRouter } from "next/navigation";
 import { useTransition, useState } from "react";
 import { STAGE_META } from "@/lib/uiMeta";
 import type { CompanyDto } from "@/lib/dto";
+import { GenerateQuestionsModal } from "@/components/GenerateQuestionsModal";
 
 const STAGES = ["APPLIED", "PREP", "INTERVIEWING", "OFFER", "REJECTED"] as const;
 const FALLBACK_BADGE = "bg-slate-500/10 text-slate-300 ring-slate-500/30";
+type GenerationSelection = {
+  provider: "curated" | "openai";
+  openAIKey?: string;
+};
 
 export function CompanyWorkspace({
   company,
@@ -20,18 +25,22 @@ export function CompanyWorkspace({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [generating, setGenerating] = useState(false);
+  const [generationModalOpen, setGenerationModalOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stage, setStage] = useState(company.stage);
   const [savingStage, setSavingStage] = useState(false);
 
   const stageMeta = STAGE_META[company.stage] ?? { label: company.stage, badge: FALLBACK_BADGE };
 
-  const generate = async () => {
+  const generate = async (selection: GenerationSelection) => {
+    setGenerationModalOpen(false);
     setGenerating(true);
     setError(null);
     try {
       const res = await fetch(`/api/companies/${company.id}/questions/generate`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(selection),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Question generation failed.");
@@ -104,7 +113,7 @@ export function CompanyWorkspace({
         </div>
         <div className="ml-auto flex items-center gap-2">
           <button
-            onClick={generate}
+            onClick={() => setGenerationModalOpen(true)}
             disabled={generating || isPending}
             className="rounded-lg bg-indigo-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-400 disabled:cursor-wait disabled:opacity-60"
           >
@@ -125,6 +134,14 @@ export function CompanyWorkspace({
       </div>
 
       {error && <p className="mt-3 text-sm text-rose-400">{error}</p>}
+
+      <GenerateQuestionsModal
+        open={generationModalOpen}
+        companyName={company.name}
+        generating={generating}
+        onCancel={() => setGenerationModalOpen(false)}
+        onGenerate={generate}
+      />
     </div>
   );
 }

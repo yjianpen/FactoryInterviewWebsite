@@ -16,6 +16,12 @@ export interface TestCaseDTO {
   explanation?: string;
 }
 
+/** Public source used by the live company-research pass. */
+export interface ResearchSource {
+  title: string;
+  url: string;
+}
+
 /** A fully-formed question produced by a generator (curated or LLM). */
 export interface GeneratedQuestion {
   category: Category;
@@ -31,6 +37,8 @@ export interface GeneratedQuestion {
    * live in src/lib/practice/specs.ts and take precedence.
    */
   starterCode?: Partial<Record<"python", string>>;
+  /** Sources used to tailor this question, when live research was enabled. */
+  researchSources?: ResearchSource[];
 }
 
 /** Everything a generator needs to produce company-specific questions. */
@@ -43,10 +51,20 @@ export interface QuestionGenInput {
   focusAreas: string[];
 }
 
+/** Per-request generation overrides. Secrets are intentionally never persisted. */
+export interface GenerateOptions {
+  openAIKey?: string;
+  provider?: "curated" | "openai";
+}
+
 /** Contract every question generator must implement. */
 export interface LLMProvider {
   readonly name: string;
-  generateQuestions(input: QuestionGenInput, perCategory?: number): Promise<GeneratedQuestion[]>;
+  generateQuestions(
+    input: QuestionGenInput,
+    perCategory?: number,
+    options?: GenerateOptions,
+  ): Promise<GeneratedQuestion[]>;
 }
 
 // ---------- zod schemas (validate LLM output before it touches the DB) ----------

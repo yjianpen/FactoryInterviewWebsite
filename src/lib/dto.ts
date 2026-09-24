@@ -1,6 +1,7 @@
 import type { Company, Question, TestCase } from "@prisma/client";
 import { parseExecSpec, toPracticeMeta } from "@/lib/practice/specs";
 import type { PracticeMeta } from "@/lib/exec/types";
+import type { ResearchSource } from "@/lib/llm/types";
 
 // Server <-> client DTOs. Two things are deliberately never sent in list payloads:
 //  - `solution`: only GET /api/questions/:id returns it ("Show me the solution")
@@ -22,6 +23,7 @@ export interface QuestionDto {
   difficulty: string;
   status: string;
   source: string;
+  researchSources: ResearchSource[];
   sortOrder: number;
   testCases: TestCaseDto[];
   /** Codepad configuration, or null when the question has no practice mode. */
@@ -46,6 +48,24 @@ export interface CompanyDto {
 
 export type QuestionCounts = Record<string, { total: number; mastered: number }>;
 
+function parseResearchSources(value: string | null): ResearchSource[] {
+  if (!value) return [];
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (source): source is ResearchSource =>
+        typeof source === "object" &&
+        source !== null &&
+        typeof (source as { title?: unknown }).title === "string" &&
+        typeof (source as { url?: unknown }).url === "string" &&
+        /^https?:\/\//i.test((source as { url: string }).url),
+    );
+  } catch {
+    return [];
+  }
+}
+
 export function toQuestionDto(q: Question & { testCases?: TestCase[] }): QuestionDto {
   return {
     id: q.id,
@@ -55,6 +75,7 @@ export function toQuestionDto(q: Question & { testCases?: TestCase[] }): Questio
     difficulty: q.difficulty,
     status: q.status,
     source: q.source,
+    researchSources: parseResearchSources(q.researchSources),
     sortOrder: q.sortOrder,
     practice: toPracticeMeta(parseExecSpec(q.execSpec)),
     testCases: (q.testCases ?? [])

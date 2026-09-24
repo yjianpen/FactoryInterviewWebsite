@@ -47,7 +47,10 @@ model Question {
   difficulty String     @default("MEDIUM") // EASY | MEDIUM | HARD
   solution   String // markdown: final solution / approach for "Show me the solution"
   status     String     @default("TODO") // TODO | PRACTICING | MASTERED
-  source     String     @default("curated") // "curated" | "openai" (extension point: more sources)
+  source     String     @default("curated") // "curated" | "openai" | "openai-web"
+  /// JSON array of {title,url} public sources used for live research.
+  /// Null for curated questions or when research was unavailable.
+  researchSources String?
   sortOrder  Int        @default(0) // stable ordering within a category
   /// JSON ExecSpec for the practice codepad: per-language starter code + test
   /// harness (see src/lib/exec/types.ts). Null = no runnable practice mode.

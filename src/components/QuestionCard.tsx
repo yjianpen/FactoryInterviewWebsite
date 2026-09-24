@@ -72,7 +72,11 @@ export function QuestionCard({
           {statusMeta.label}
         </span>
         <span className="rounded-full bg-slate-800/70 px-2.5 py-0.5 text-[11px] font-medium text-slate-400">
-          {question.source === "openai" ? "AI-generated" : "curated"}
+          {question.source === "openai-web"
+            ? "AI + web research"
+            : question.source === "openai"
+              ? "AI-generated"
+              : "curated"}
         </span>
       </div>
 
@@ -80,6 +84,28 @@ export function QuestionCard({
       <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-300">
         {question.prompt}
       </p>
+
+      {question.researchSources.length > 0 && (
+        <details className="mt-3 rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2">
+          <summary className="cursor-pointer text-xs font-medium text-slate-400">
+            Research sources ({question.researchSources.length})
+          </summary>
+          <ul className="mt-2 space-y-1 pl-4 text-xs text-slate-500">
+            {question.researchSources.map((source) => (
+              <li key={source.url}>
+                <a
+                  href={source.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-indigo-300 underline decoration-indigo-500/40 underline-offset-2 hover:text-indigo-200"
+                >
+                  {source.title}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
 
       {question.testCases.length > 0 && (
         <div className="mt-4 overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/60">
