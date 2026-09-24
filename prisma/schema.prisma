@@ -1,0 +1,77 @@
+// Interview Prep – Prisma schema (SQLite now, Postgres later).
+// To move to Postgres for production: change `provider` to "postgresql",
+// update DATABASE_URL in .env, and optionally reintroduce enums
+// (SQLite has no enum support, so we use String + app-level constants).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Models ----------
+// String "enum-ish" fields use these constant values (see src/lib/):
+//   Company.stage:     APPLIED | PREP | INTERVIEWING | OFFER | REJECTED
+//   Question.category: CODING | BEHAVIORAL | SYSTEM_DESIGN | DOMAIN
+//   Question.difficulty: EASY | MEDIUM | HARD
+//   Question.status:   TODO | PRACTICING | MASTERED
+
+/// A company the user applied to (or plans to prep for). One company => one question set.
+model Company {
+  id        String     @id @default(cuid())
+  name      String     @unique
+  role      String? // the job title you applied for
+  stage     String     @default("APPLIED")
+  notes     String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  questions Question[]
+
+  @@map("companies")
+}
+
+/// A single interview question, always owned by one company.
+/// The `solution` is intentionally NOT returned by list endpoints:
+/// the client only fetches it (GET /api/questions/:id) when the user clicks
+/// "Show me the solution".
+model Question {
+  id         String     @id @default(cuid())
+  companyId  String
+  company    Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  category   String // CODING | BEHAVIORAL | SYSTEM_DESIGN | DOMAIN
+  title      String
+  prompt     String // full question text / statement
+  difficulty String     @default("MEDIUM") // EASY | MEDIUM | HARD
+  solution   String // markdown: final solution / approach for "Show me the solution"
+  status     String     @default("TODO") // TODO | PRACTICING | MASTERED
+  source     String     @default("curated") // "curated" | "openai" (extension point: more sources)
+  sortOrder  Int        @default(0) // stable ordering within a category
+  /// JSON ExecSpec for the practice codepad: per-language starter code + test
+  /// harness (see src/lib/exec/types.ts). Null = no runnable practice mode.
+  /// Harnesses stay server-side; only starter code is sent to the browser.
+  execSpec   String?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  testCases  TestCase[]
+
+  @@index([companyId])
+  @@map("questions")
+}
+
+/// Example test cases for a question (input -> expected output), always visible.
+model TestCase {
+  id          String   @id @default(cuid())
+  questionId  String
+  question    Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  input       String
+  expected    String
+  explanation String?
+  isHidden    Boolean  @default(false) // reserved for future hidden cases / autograding
+  sortOrder   Int      @default(0)
+
+  @@index([questionId])
+  @@map("test_cases")
+}

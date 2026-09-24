@@ -27,9 +27,14 @@ yarn-error.log*
 
 # local env files
 .env*.local
+.env
 
 # vercel
 .vercel
+
+# local database file (migrations are committed; regenerate DB with `npm run prisma:migrate`)
+prisma/dev.db*
+prisma/dev.db-journal
 
 # typescript
 *.tsbuildinfo
