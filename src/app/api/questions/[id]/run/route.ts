@@ -17,6 +17,10 @@ import { getCurrentUser } from "@/lib/auth";
 
 type Params = { params: { id: string } };
 
+// On Vercel the run happens in a Sandbox microVM: allow for creation, the
+// configured run timeout, and teardown.
+export const maxDuration = 60;
+
 export async function POST(request: Request, { params }: Params) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Sign in required." }, { status: 401 });

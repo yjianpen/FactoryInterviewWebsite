@@ -4,7 +4,10 @@ import path from "node:path";
 import { mkdtemp, rm } from "node:fs/promises";
 import { CONFIG } from "@/lib/config";
 import { readHarnessResults } from "./results";
+import type { HarnessResults } from "./results";
 import { runProcess } from "./process";
+import type { ProcessResult } from "./process";
+import { runPythonInSandbox } from "./sandbox";
 import { pythonRuntime } from "./python";
 import { RUN_LANGUAGES, LANGUAGE_META } from "./types";
 import type { ExecSpec, RunLanguage, RunResult, RuntimeStatus } from "./types";
@@ -68,6 +71,50 @@ export async function runtimeStatuses(): Promise<RuntimeStatus[]> {
 
 export class CodeExecutionDisabledError extends Error {}
 
+/**
+ * Turn a finished process plus its harness results into the RunResult the API
+ * and UI consume. Shared by the local spawn runner and the Vercel Sandbox
+ * runner so grading behaviour is identical on both.
+ */
+function assembleResult(
+  base: RunResult,
+  proc: ProcessResult,
+  harnessResults: HarnessResults,
+  mode: RunResult["mode"],
+): RunResult {
+  const passed = harnessResults.cases.filter((c) => c.passed).length;
+  const total = harnessResults.cases.length;
+  const timeoutSeconds = Math.round(CONFIG.runTimeoutMs / 1000);
+
+  let runtimeError: string | null = harnessResults.error;
+  if (proc.timedOut) {
+    runtimeError = `Timed out after ${timeoutSeconds}s — check for an infinite loop.`;
+  } else if (!runtimeError && mode === "checked" && !harnessResults.reported) {
+    runtimeError =
+      proc.exitCode === 0
+        ? "The run finished without reporting any results (the question's harness may be broken)."
+        : "Your program crashed before the tests could report. See the error output below.";
+  } else if (!runtimeError && mode === "freeform" && proc.exitCode !== 0) {
+    runtimeError = "Your program exited with a non-zero status. See the error output below.";
+  }
+
+  return {
+    ...base,
+    ok: !proc.timedOut && !runtimeError,
+    cases: harnessResults.cases,
+    passed,
+    total,
+    allPassed: mode === "checked" && total > 0 && passed === total && !proc.timedOut && !runtimeError,
+    stdout: proc.stdout.replace(/\s+$/, ""),
+    stderr: proc.stderr.replace(/\s+$/, ""),
+    runtimeError,
+    timedOut: proc.timedOut,
+    truncated: proc.truncated,
+    exitCode: proc.exitCode,
+    durationMs: proc.durationMs,
+  };
+}
+
 export interface RunCodeInput {
   language: RunLanguage;
   code: string;
@@ -105,6 +152,17 @@ export async function runCode({ language, code, spec }: RunCodeInput): Promise<R
     durationMs: 0,
   };
 
+  // On Vercel there is no system Python, so run in an isolated Sandbox microVM.
+  if (process.env.VERCEL && language === "python") {
+    const { proc, harness: harnessResults } = await runPythonInSandbox({
+      code,
+      harness,
+      timeoutMs: CONFIG.runTimeoutMs,
+      maxOutputChars: CONFIG.maxRunOutputChars,
+    });
+    return assembleResult(base, proc, harnessResults, mode);
+  }
+
   const dir = await mkdtemp(path.join(os.tmpdir(), "interview-prep-run-"));
   // Randomized name: practiced code cannot guess the path and pre-write results.
   const resultsPath = path.join(dir, `results-${crypto.randomBytes(12).toString("hex")}.json`);
@@ -137,37 +195,7 @@ export async function runCode({ language, code, spec }: RunCodeInput): Promise<R
         ? await readHarnessResults(resultsPath)
         : { cases: [], error: null, reported: true };
 
-    const passed = harnessResults.cases.filter((c) => c.passed).length;
-    const total = harnessResults.cases.length;
-    const timeoutSeconds = Math.round(CONFIG.runTimeoutMs / 1000);
-
-    let runtimeError: string | null = harnessResults.error;
-    if (proc.timedOut) {
-      runtimeError = `Timed out after ${timeoutSeconds}s — check for an infinite loop.`;
-    } else if (!runtimeError && mode === "checked" && !harnessResults.reported) {
-      runtimeError =
-        proc.exitCode === 0
-          ? "The run finished without reporting any results (the question's harness may be broken)."
-          : "Your program crashed before the tests could report. See the error output below.";
-    } else if (!runtimeError && mode === "freeform" && proc.exitCode !== 0) {
-      runtimeError = "Your program exited with a non-zero status. See the error output below.";
-    }
-
-    return {
-      ...base,
-      ok: !proc.timedOut && !runtimeError,
-      cases: harnessResults.cases,
-      passed,
-      total,
-      allPassed: mode === "checked" && total > 0 && passed === total && !proc.timedOut && !runtimeError,
-      stdout: proc.stdout.replace(/\s+$/, ""),
-      stderr: proc.stderr.replace(/\s+$/, ""),
-      runtimeError,
-      timedOut: proc.timedOut,
-      truncated: proc.truncated,
-      exitCode: proc.exitCode,
-      durationMs: proc.durationMs,
-    };
+    return assembleResult(base, proc, harnessResults, mode);
   } finally {
     await rm(dir, { recursive: true, force: true }).catch(() => {
       /* temp dir cleanup is best-effort */

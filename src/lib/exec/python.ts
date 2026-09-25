@@ -1,6 +1,7 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { LanguageRuntime, PreparedProgram } from "./runner";
+import type { RuntimeStatus } from "./types";
 import { detectCommand } from "./detect";
 
 // Python runtime for the practice codepad.
@@ -175,10 +176,65 @@ globals().update({_k: _v for _k, _v in vars(_user_code).items() if not _k.starts
 
 `;
 
+export interface PythonProgram {
+  /** Files to place in the working directory, in write order. */
+  files: { name: string; content: string }[];
+  /** Script to execute. */
+  entry: string;
+  /** False in freeform mode (no assertions, no results file). */
+  checked: boolean;
+}
+
+/**
+ * Build the program for one run: your code plus, in checked mode, the injected
+ * judge and the question's harness. Shared by the local spawn runner and the
+ * Vercel Sandbox runner so both execute byte-identical programs.
+ */
+export function buildPythonProgram(input: {
+  code: string;
+  harness?: string;
+  resultsPath: string;
+}): PythonProgram {
+  if (!input.harness) {
+    return {
+      files: [{ name: "user_code.py", content: input.code }],
+      entry: "user_code.py",
+      checked: false,
+    };
+  }
+
+  // JSON.stringify produces a correctly escaped Python string literal.
+  const judgeSource = JUDGE_PY.replace("__RESULTS_PATH__", JSON.stringify(input.resultsPath));
+
+  return {
+    files: [
+      { name: "user_code.py", content: input.code },
+      { name: "judge.py", content: judgeSource },
+      { name: "tests.py", content: TESTS_PREAMBLE + input.harness },
+      { name: "main.py", content: MAIN_PY },
+    ],
+    entry: "main.py",
+    checked: true,
+  };
+}
+
 export const pythonRuntime: LanguageRuntime = {
   language: "python",
 
   async detect() {
+    // On Vercel the serverless runtime ships no system Python; practiced code
+    // runs in a Vercel Sandbox microVM whose image includes Python instead.
+    if (process.env.VERCEL) {
+      return {
+        language: "python",
+        label: "Python 3",
+        available: true,
+        version: null,
+        command: "vercel-sandbox",
+        hint: null,
+      } satisfies RuntimeStatus;
+    }
+
     return detectCommand({
       language: "python",
       label: "Python 3",
@@ -194,27 +250,14 @@ export const pythonRuntime: LanguageRuntime = {
       return { error: status.hint ?? "Python 3 was not found on this machine." };
     }
 
-    await writeFile(path.join(dir, "user_code.py"), code, "utf8");
-
-    if (!harness) {
-      // Freeform: run the file as a plain script, no assertions.
-      return {
-        command: status.command,
-        args: ["user_code.py"],
-        env: { PYTHONDONTWRITEBYTECODE: "1" },
-      };
-    }
-
-    // JSON.stringify produces a correctly escaped Python string literal.
-    const judgeSource = JUDGE_PY.replace("__RESULTS_PATH__", JSON.stringify(resultsPath));
-
-    await writeFile(path.join(dir, "judge.py"), judgeSource, "utf8");
-    await writeFile(path.join(dir, "tests.py"), TESTS_PREAMBLE + harness, "utf8");
-    await writeFile(path.join(dir, "main.py"), MAIN_PY, "utf8");
+    const program = buildPythonProgram({ code, harness, resultsPath });
+    await Promise.all(
+      program.files.map((file) => writeFile(path.join(dir, file.name), file.content, "utf8")),
+    );
 
     return {
       command: status.command,
-      args: ["main.py"],
+      args: [program.entry],
       env: { PYTHONDONTWRITEBYTECODE: "1" },
     };
   },

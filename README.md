@@ -91,7 +91,7 @@ src/
       index.ts                   # provider factory (auto/openai/curated)
     config.ts                    # all tunables (env overrides)
     prisma.ts / dto.ts / uiMeta.ts
-    exec/                       # runtime detection, process limits, and runners
+    exec/                       # runtime detection, local process runner, and Vercel Sandbox runner
     practice/specs.ts           # checked Python starters and test harnesses
 prisma/schema.prisma             # PostgreSQL Company, Question, TestCase
 ```
@@ -153,6 +153,24 @@ by OpenAI can still show a freeform editor when they include starter code, but
 they are not automatically graded unless a matching server-side harness is
 added.
 
+### Where code runs
+
+The execution target is chosen automatically:
+
+- **On Vercel**: each run happens in an isolated **Vercel Sandbox** microVM
+  (Firecracker) whose image includes Python 3. The Vercel serverless runtime has
+  no system Python, so this is the only way the CodePad works there. The sandbox
+  is created per run, has network egress denied, and is stopped immediately afterward.
+- **Everywhere else**: the runner spawns the local `python3` with a temporary
+  working directory, a minimal environment, output limits, and a wall-clock
+  timeout. That is **process-level containment, not a security sandbox** —
+  submitted code runs with the server user's operating-system permissions, so
+  keep it local or put it behind authentication.
+
+Both paths run the identical program (see `buildPythonProgram`) and grade through
+the same results-file protocol, so pass/fail behaviour does not depend on where
+it ran.
+
 ### CodePad configuration
 
 ```bash
@@ -162,20 +180,19 @@ RUN_TIMEOUT_MS=8000            # allowed range: 1000–60000
 MAX_RUN_OUTPUT_CHARS=64000    # per stream; allowed range: 2000–500000
 ```
 
+On Vercel, set `CODE_EXECUTION_ENABLED=true` in the project's environment
+variables to turn the CodePad on. No Python install or extra secret is needed:
+the Sandbox SDK authenticates with the project's Vercel OIDC token, which
+production provides automatically.
+
 `POST /api/questions/:id/run` also limits submitted code to 100 KB. The
 `GET /api/status` response reports whether execution is enabled and which
-runtimes were detected.
+runtimes were detected; it is rendered dynamically so detection reflects the
+runtime that serves requests, not the build machine.
 
 Live interview research uses OpenAI web search and adds search/tool cost to
 generation. Set `OPENAI_WEB_RESEARCH=false` to disable it, or use
 `QUESTION_PROVIDER=curated` for a completely offline generator.
-
-The runner uses a temporary working directory, a minimal environment, output
-limits, and a wall-clock timeout. This is **process-level containment, not a
-security sandbox**: submitted code runs with the server user's operating-system
-permissions. Keep CodePad local or place it behind authentication and a real
-sandbox before exposing it to other users. In production, leave
-`CODE_EXECUTION_ENABLED=false` unless you have added that isolation.
 
 Only Python is registered today. C++ is intentionally deferred until a working
 compiler toolchain is available. To add a language later, implement a
@@ -231,13 +248,15 @@ Current posture: **authenticated multi-user app**. Before exposing it broadly:
 - **Rate limiting**: add per-user rate limits to `POST /api/...` (generation calls
   spend your OpenAI budget and live research adds another billable call);
   e.g. `@upstash/ratelimit` or a simple in-DB token bucket.
-- **Code execution**: do not expose `/api/questions/:id/run` publicly without a
-  sandbox, authentication, resource limits, and rate limiting. The local runner
-  is not sufficient isolation for untrusted users.
+- **Code execution**: on Vercel each run executes in an isolated Vercel Sandbox
+  microVM with egress denied, so it is safe to enable for authenticated users.
+  Anywhere else the runner is process-level only, not a sandbox: keep the CodePad
+  local or behind a real sandbox, and add per-user rate limits before opening it
+  to untrusted users.
 - **Dependency hygiene**: this scaffold is pinned to Next 14.2.35 (the final
-  14.x), which needs only Node 18.17. The audit currently reports known Next.js
-  advisories. For a public deployment on current runtime, upgrade Next to the
-  latest 15/16 line first (needs Node 20+), then re-run `npm audit`.
+  14.x). The Vercel Sandbox SDK requires Node 20.18+, so `engines.node` is
+  `>=20.18.1` (Vercel uses Node 22). The audit currently reports known Next.js
+  advisories; upgrade Next to the latest 15/16 line and re-run `npm audit`.
 - **Database backup**: use the managed backup and branching tools provided by
   Neon/Vercel Postgres.
 - **Error handling**: API routes return sanitized messages; in production set

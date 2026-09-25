@@ -6,6 +6,11 @@ import { runtimeStatuses } from "@/lib/exec/runner";
 // Lightweight health/status endpoint: what question provider is active, whether
 // an OpenAI key is configured, which code runtimes are installed, and app
 // tunables. Useful for the UI and as a deployment health check.
+//
+// Dynamic on purpose: runtime detection must reflect the runtime that answers
+// requests, not the build machine (which may have different toolchains).
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     return NextResponse.json({

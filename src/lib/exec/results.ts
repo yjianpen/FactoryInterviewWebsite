@@ -30,14 +30,8 @@ export interface HarnessResults {
   reported: boolean;
 }
 
-export async function readHarnessResults(resultsPath: string): Promise<HarnessResults> {
-  let raw: string;
-  try {
-    raw = await readFile(resultsPath, "utf8");
-  } catch {
-    return { cases: [], error: null, reported: false };
-  }
-
+/** Parse the raw JSON produced by the in-run harness. Shared by the local and sandbox runners. */
+export function parseHarnessResults(raw: string): HarnessResults {
   try {
     const parsed = resultsFileSchema.parse(JSON.parse(raw));
     return {
@@ -57,4 +51,15 @@ export async function readHarnessResults(resultsPath: string): Promise<HarnessRe
       reported: true,
     };
   }
+}
+
+export async function readHarnessResults(resultsPath: string): Promise<HarnessResults> {
+  let raw: string;
+  try {
+    raw = await readFile(resultsPath, "utf8");
+  } catch {
+    return { cases: [], error: null, reported: false };
+  }
+
+  return parseHarnessResults(raw);
 }
