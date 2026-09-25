@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { SiteHeader } from "@/components/SiteHeader";
 import { CompanyWorkspace } from "@/components/CompanyWorkspace";
 import { QuestionCard } from "@/components/QuestionCard";
@@ -8,6 +9,7 @@ import { CATEGORY_META, CATEGORY_ORDER } from "@/lib/uiMeta";
 import type { CompanyDto, QuestionDto } from "@/lib/dto";
 
 export default function CompanyPage({ params }: { params: { id: string } }) {
+  const router = useRouter();
   const [company, setCompany] = useState<CompanyDto | null>(null);
   const [questions, setQuestions] = useState<QuestionDto[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -15,6 +17,10 @@ export default function CompanyPage({ params }: { params: { id: string } }) {
   const load = useCallback(async () => {
     try {
       const res = await fetch(`/api/companies/${params.id}`);
+      if (res.status === 401) {
+        router.replace("/login");
+        return;
+      }
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Could not load company.");
       setCompany(data.company);
@@ -23,7 +29,7 @@ export default function CompanyPage({ params }: { params: { id: string } }) {
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : String(err));
     }
-  }, [params.id]);
+  }, [params.id, router]);
 
   useEffect(() => {
     load();

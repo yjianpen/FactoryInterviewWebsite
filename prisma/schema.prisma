@@ -1,14 +1,13 @@
-// Interview Prep – Prisma schema (SQLite now, Postgres later).
-// To move to Postgres for production: change `provider` to "postgresql",
-// update DATABASE_URL in .env, and optionally reintroduce enums
-// (SQLite has no enum support, so we use String + app-level constants).
+// Interview Prep – PostgreSQL-backed production schema.
+// SQLite migrations are retained under prisma/migrations-sqlite for local
+// history, but deployed and current local data use PostgreSQL.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -19,10 +18,35 @@ datasource db {
 //   Question.difficulty: EASY | MEDIUM | HARD
 //   Question.status:   TODO | PRACTICING | MASTERED
 
-/// A company the user applied to (or plans to prep for). One company => one question set.
+/// A registered user. Passwords are stored as scrypt hashes; sessions store only
+/// SHA-256 hashes of the browser token.
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  createdAt    DateTime  @default(now())
+  companies    Company[]
+  sessions     Session[]
+}
+
+/// A revocable, database-backed login session.
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+/// A company the user applied to (or plans to prep for). One user => one question set.
 model Company {
   id        String     @id @default(cuid())
-  name      String     @unique
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
   role      String? // the job title you applied for
   stage     String     @default("APPLIED")
   notes     String?
@@ -30,6 +54,8 @@ model Company {
   updatedAt DateTime   @updatedAt
   questions Question[]
 
+  @@index([userId])
+  @@unique([userId, name])
   @@map("companies")
 }
 

@@ -5,6 +5,8 @@ import { CompanyCard } from "@/components/CompanyCard";
 import { AddCompanyForm } from "@/components/AddCompanyForm";
 import { CONFIG } from "@/lib/config";
 import { providerStatus } from "@/lib/llm";
+import { getCurrentUser } from "@/lib/auth";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +18,11 @@ try {
 }
 
 export default async function Home() {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+
   const companies = await prisma.company.findMany({
+    where: { userId: user.id },
     orderBy: [{ createdAt: "desc" }],
     include: {
       _count: { select: { questions: true } },

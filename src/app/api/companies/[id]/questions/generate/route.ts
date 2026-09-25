@@ -6,6 +6,7 @@ import { execSpecForTitle } from "@/lib/practice/specs";
 import type { GeneratedQuestion } from "@/lib/llm/types";
 import type { ExecSpec } from "@/lib/exec/types";
 import { z } from "zod";
+import { getCurrentUser } from "@/lib/auth";
 
 /**
  * Attach the codepad configuration for a generated question:
@@ -46,7 +47,12 @@ const generateRequestSchema = z.object({
 });
 
 export async function POST(request: Request, { params }: Params) {
-  const company = await prisma.company.findUnique({ where: { id: params.id } });
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+
+  const company = await prisma.company.findFirst({
+    where: { id: params.id, userId: user.id },
+  });
   if (!company) {
     return NextResponse.json({ error: "Company not found." }, { status: 404 });
   }

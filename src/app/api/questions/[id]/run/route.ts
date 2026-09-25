@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { parseExecSpec } from "@/lib/practice/specs";
 import { CodeExecutionDisabledError, runCode } from "@/lib/exec/runner";
 import { runRequestSchema } from "@/lib/exec/types";
+import { getCurrentUser } from "@/lib/auth";
 
 // Runs submitted code for one question and checks it against the question's
 // server-side test harness.
@@ -17,7 +18,12 @@ import { runRequestSchema } from "@/lib/exec/types";
 type Params = { params: { id: string } };
 
 export async function POST(request: Request, { params }: Params) {
-  const question = await prisma.question.findUnique({ where: { id: params.id } });
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+
+  const question = await prisma.question.findFirst({
+    where: { id: params.id, company: { userId: user.id } },
+  });
   if (!question) {
     return NextResponse.json({ error: "Question not found." }, { status: 404 });
   }
