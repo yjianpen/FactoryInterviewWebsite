@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
+import { cpp } from "@codemirror/lang-cpp";
+import { java } from "@codemirror/lang-java";
 import { python } from "@codemirror/lang-python";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { LANGUAGE_META } from "@/lib/exec/types";
@@ -91,7 +93,10 @@ export function CodePad({
     }
   }, [code, language, questionId, onAllPassed]);
 
-  const extensions = useMemo(() => [python()], []);
+  const extensions = useMemo(() => {
+    const extension = { python, cpp, java }[language];
+    return [extension()];
+  }, [language]);
   const runLabel = practice.mode === "checked" ? "Run tests" : "Run code";
 
   return (

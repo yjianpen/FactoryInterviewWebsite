@@ -7,7 +7,9 @@ import { readHarnessResults } from "./results";
 import type { HarnessResults } from "./results";
 import { runProcess } from "./process";
 import type { ProcessResult } from "./process";
-import { runPythonInSandbox } from "./sandbox";
+import { runInSandbox } from "./sandbox";
+import { cppRuntime } from "./cpp";
+import { javaRuntime } from "./java";
 import { pythonRuntime } from "./python";
 import { RUN_LANGUAGES, LANGUAGE_META } from "./types";
 import type { ExecSpec, RunLanguage, RunResult, RuntimeStatus } from "./types";
@@ -23,6 +25,9 @@ import type { ExecSpec, RunLanguage, RunResult, RuntimeStatus } from "./types";
 // The API route, the UI and the results table are all language-agnostic already.
 
 export interface PreparedProgram {
+  /** Optional build step. Its failures are reported as compileError. */
+  compileCommand?: string;
+  compileArgs?: string[];
   command?: string;
   args?: string[];
   env?: Record<string, string>;
@@ -48,6 +53,8 @@ export interface LanguageRuntime {
 
 const RUNTIMES: Partial<Record<RunLanguage, LanguageRuntime>> = {
   python: pythonRuntime,
+  cpp: cppRuntime,
+  java: javaRuntime,
 };
 
 export async function runtimeStatuses(): Promise<RuntimeStatus[]> {
@@ -152,15 +159,20 @@ export async function runCode({ language, code, spec }: RunCodeInput): Promise<R
     durationMs: 0,
   };
 
-  // On Vercel there is no system Python, so run in an isolated Sandbox microVM.
-  if (process.env.VERCEL && language === "python") {
-    const { proc, harness: harnessResults } = await runPythonInSandbox({
+  // Vercel's serverless runtime has no language toolchains, so every language
+  // runs in an isolated Sandbox microVM there.
+  if (process.env.VERCEL) {
+    const sandboxed = await runInSandbox({
+      language,
       code,
       harness,
       timeoutMs: CONFIG.runTimeoutMs,
       maxOutputChars: CONFIG.maxRunOutputChars,
     });
-    return assembleResult(base, proc, harnessResults, mode);
+    if (sandboxed.compileError) {
+      return { ...base, compileError: sandboxed.compileError, durationMs: sandboxed.proc.durationMs };
+    }
+    return assembleResult(base, sandboxed.proc, sandboxed.harness, mode);
   }
 
   const dir = await mkdtemp(path.join(os.tmpdir(), "interview-prep-run-"));
@@ -171,6 +183,33 @@ export async function runCode({ language, code, spec }: RunCodeInput): Promise<R
     const prepared = await runtime.prepare({ dir, code, harness, resultsPath });
     if (prepared.error || !prepared.command) {
       return { ...base, compileError: prepared.error ?? "Could not prepare the program." };
+    }
+
+    if (prepared.compileCommand) {
+      const compile = await runProcess({
+        command: prepared.compileCommand,
+        args: prepared.compileArgs ?? [],
+        cwd: dir,
+        timeoutMs: CONFIG.runTimeoutMs,
+        maxOutputChars: CONFIG.maxRunOutputChars,
+      });
+      if (compile.spawnError) {
+        return {
+          ...base,
+          compileError: `Could not start ${prepared.compileCommand}: ${compile.spawnError}`,
+          durationMs: compile.durationMs,
+        };
+      }
+      if (compile.timedOut || compile.exitCode !== 0) {
+        return {
+          ...base,
+          compileError: `${compile.stdout}${compile.stderr}`.trim() || "Compilation failed.",
+          timedOut: compile.timedOut,
+          truncated: compile.truncated,
+          exitCode: compile.exitCode,
+          durationMs: compile.durationMs,
+        };
+      }
     }
 
     const proc = await runProcess({

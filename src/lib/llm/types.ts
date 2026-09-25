@@ -36,7 +36,7 @@ export interface GeneratedQuestion {
    * in freeform mode: the code runs, but nothing is asserted. Verified harnesses
    * live in src/lib/practice/specs.ts and take precedence.
    */
-  starterCode?: Partial<Record<"python", string>>;
+  starterCode?: Partial<Record<"python" | "cpp" | "java", string>>;
   /** Sources used to tailor this question, when live research was enabled. */
   researchSources?: ResearchSource[];
 }
@@ -83,7 +83,11 @@ export const generatedQuestionSchema = z.object({
   testCases: z.array(testCaseSchema).max(8).default([]),
   solution: z.string().min(1),
   starterCode: z
-    .object({ python: z.string().min(1).max(4000).optional() })
+    .object({
+      python: z.string().min(1).max(4000).optional(),
+      cpp: z.string().min(1).max(4000).optional(),
+      java: z.string().min(1).max(4000).optional(),
+    })
     .optional(),
 });
 

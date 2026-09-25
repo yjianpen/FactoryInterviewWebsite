@@ -43,6 +43,57 @@ case("negatives: nums=[-3,4,3,90], target=0", lambda: twoSum([-3, 4, 3, 90], 0),
 case("answer at the end (10k elements)", lambda: twoSum(list(range(1, 10001)), 19999), [9998, 9999])
 `,
       },
+      cpp: {
+        starter: `#include <unordered_map>
+#include <vector>
+
+std::vector<int> twoSum(const std::vector<int>& nums, int target) {
+    // your code here
+    return {};
+}
+`,
+        harness: `int main() {
+  judge::case_("nums=[2,7,11,15], target=9", twoSum({2, 7, 11, 15}, 9), std::vector<int>{0, 1});
+  judge::case_("nums=[3,2,4], target=6", twoSum({3, 2, 4}, 6), std::vector<int>{1, 2});
+  judge::case_("duplicate values: nums=[3,3], target=6", twoSum({3, 3}, 6), std::vector<int>{0, 1});
+  judge::case_("negatives: nums=[-3,4,3,90], target=0", twoSum({-3, 4, 3, 90}, 0), std::vector<int>{0, 2});
+  std::vector<int> large;
+  for (int i = 1; i <= 10000; ++i) large.push_back(i);
+  judge::case_("answer at the end (10k elements)", twoSum(large, 19999), std::vector<int>{9998, 9999});
+  return judge::finish();
+}
+`,
+      },
+      java: {
+        starter: `import java.util.HashMap;
+import java.util.Map;
+
+public class Solution {
+    public int[] twoSum(int[] nums, int target) {
+        // your code here
+        return new int[0];
+    }
+}
+`,
+        harness: `public class Main {
+  public static void main(String[] args) {
+    try {
+      Solution solution = new Solution();
+      Judge.case_("nums=[2,7,11,15], target=9", solution.twoSum(new int[] {2, 7, 11, 15}, 9), new int[] {0, 1});
+      Judge.case_("nums=[3,2,4], target=6", solution.twoSum(new int[] {3, 2, 4}, 6), new int[] {1, 2});
+      Judge.case_("duplicate values: nums=[3,3], target=6", solution.twoSum(new int[] {3, 3}, 6), new int[] {0, 1});
+      Judge.case_("negatives: nums=[-3,4,3,90], target=0", solution.twoSum(new int[] {-3, 4, 3, 90}, 0), new int[] {0, 2});
+      int[] large = new int[10000];
+      for (int i = 0; i < large.length; i++) large[i] = i + 1;
+      Judge.case_("answer at the end (10k elements)", solution.twoSum(large, 19999), new int[] {9998, 9999});
+    } catch (Throwable error) {
+      Judge.error(error.getClass().getSimpleName() + ": " + error.getMessage());
+    }
+    System.exit(Judge.finish());
+  }
+}
+`,
+      },
     },
   },
 
@@ -66,6 +117,59 @@ case('s="]" (closer only)', lambda: isValid("]"), False)
 case('s="((((()))))"', lambda: isValid("((((()))))"), True)
 case('s="(((" (never closed)', lambda: isValid("((("), False)
 case('s="{[]}"', lambda: isValid("{[]}"), True)
+`,
+      },
+      cpp: {
+        starter: `#include <string>
+#include <vector>
+
+bool isValid(const std::string& s) {
+    // your code here
+    return false;
+}
+`,
+        harness: `int main() {
+  judge::case_("s=()[]{}", isValid("()[]{}"), true);
+  judge::case_("s=([)] (wrong nesting)", isValid("([)]"), false);
+  judge::case_("s=(]", isValid("(]"), false);
+  judge::case_("s=empty (empty is valid)", isValid(""), true);
+  judge::case_("s=] (closer only)", isValid("]"), false);
+  judge::case_("s=((((()))))", isValid("((((()))))"), true);
+  judge::case_("s=((( (never closed)", isValid("((("), false);
+  judge::case_("s={[]}", isValid("{[]}"), true);
+  return judge::finish();
+}
+`,
+      },
+      java: {
+        starter: `import java.util.ArrayDeque;
+import java.util.Deque;
+
+public class Solution {
+    public boolean isValid(String s) {
+        // your code here
+        return false;
+    }
+}
+`,
+        harness: `public class Main {
+  public static void main(String[] args) {
+    try {
+      Solution solution = new Solution();
+      Judge.case_("s=()[]{}", solution.isValid("()[]{}"), true);
+      Judge.case_("s=([)] (wrong nesting)", solution.isValid("([)]"), false);
+      Judge.case_("s=(]", solution.isValid("(]"), false);
+      Judge.case_("s=empty (empty is valid)", solution.isValid(""), true);
+      Judge.case_("s=] (closer only)", solution.isValid("]"), false);
+      Judge.case_("s=((((()))))", solution.isValid("((((()))))"), true);
+      Judge.case_("s=((( (never closed)", solution.isValid("((("), false);
+      Judge.case_("s={[]}", solution.isValid("{[]}"), true);
+    } catch (Throwable error) {
+      Judge.error(error.getClass().getSimpleName() + ": " + error.getMessage());
+    }
+    System.exit(Judge.finish());
+  }
+}
 `,
       },
     },
@@ -303,6 +407,57 @@ case("different lengths", lambda: is_rotation("aa", "aaa"), False)
 case('"aab" / "aba"', lambda: is_rotation("aab", "aba"), True)
 case("repeated characters", lambda: is_rotation("aaaa", "aaaa"), True)
 case("substring but not rotation", lambda: is_rotation("abcde", "abced"), False)
+`,
+      },
+      cpp: {
+        starter: `#include <string>
+
+bool is_rotation(const std::string& s1, const std::string& s2) {
+    // your code here
+    return false;
+}
+`,
+        harness: `int main() {
+  judge::case_("waterbottle / terbottlewa", is_rotation("waterbottle", "terbottlewa"), true);
+  judge::case_("abc / acb (not a rotation)", is_rotation("abc", "acb"), false);
+  judge::case_("empty strings", is_rotation("", ""), true);
+  judge::case_("single character", is_rotation("a", "a"), true);
+  judge::case_("rotation by zero (identical)", is_rotation("abc", "abc"), true);
+  judge::case_("different lengths", is_rotation("aa", "aaa"), false);
+  judge::case_("aab / aba", is_rotation("aab", "aba"), true);
+  judge::case_("repeated characters", is_rotation("aaaa", "aaaa"), true);
+  judge::case_("substring but not rotation", is_rotation("abcde", "abced"), false);
+  return judge::finish();
+}
+`,
+      },
+      java: {
+        starter: `public class Solution {
+    public boolean is_rotation(String s1, String s2) {
+        // your code here
+        return false;
+    }
+}
+`,
+        harness: `public class Main {
+  public static void main(String[] args) {
+    try {
+      Solution solution = new Solution();
+      Judge.case_("waterbottle / terbottlewa", solution.is_rotation("waterbottle", "terbottlewa"), true);
+      Judge.case_("abc / acb (not a rotation)", solution.is_rotation("abc", "acb"), false);
+      Judge.case_("empty strings", solution.is_rotation("", ""), true);
+      Judge.case_("single character", solution.is_rotation("a", "a"), true);
+      Judge.case_("rotation by zero (identical)", solution.is_rotation("abc", "abc"), true);
+      Judge.case_("different lengths", solution.is_rotation("aa", "aaa"), false);
+      Judge.case_("aab / aba", solution.is_rotation("aab", "aba"), true);
+      Judge.case_("repeated characters", solution.is_rotation("aaaa", "aaaa"), true);
+      Judge.case_("substring but not rotation", solution.is_rotation("abcde", "abced"), false);
+    } catch (Throwable error) {
+      Judge.error(error.getClass().getSimpleName() + ": " + error.getMessage());
+    }
+    System.exit(Judge.finish());
+  }
+}
 `,
       },
     },

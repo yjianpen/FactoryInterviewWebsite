@@ -4,18 +4,20 @@ import { z } from "zod";
 // the starter code shown in the editor, and the server-side test harness that
 // decides pass/fail.
 //
-// HOW TO EXTEND WITH A NEW LANGUAGE (e.g. C++):
+// HOW TO EXTEND WITH A NEW LANGUAGE:
 //  1. Add its id to RUN_LANGUAGES + LANGUAGE_META below.
 //  2. Add the key to `languagesSchema` (one line).
 //  3. Implement a LanguageRuntime for it and register it in src/lib/exec/runner.ts.
 //  4. Add `starter` + `harness` for that language to the questions in
 //     src/lib/practice/specs.ts.
 
-export const RUN_LANGUAGES = ["python"] as const;
+export const RUN_LANGUAGES = ["python", "cpp", "java"] as const;
 export type RunLanguage = (typeof RUN_LANGUAGES)[number];
 
 export const LANGUAGE_META: Record<RunLanguage, { label: string; fileExt: string }> = {
   python: { label: "Python 3", fileExt: "py" },
+  cpp: { label: "C++ 20", fileExt: "cpp" },
+  java: { label: "Java 21", fileExt: "java" },
 };
 
 /** Starter code (sent to the browser) + harness (server-side only). */
@@ -31,6 +33,8 @@ export const languageSpecSchema = z.object({
 
 const languagesSchema = z.object({
   python: languageSpecSchema.optional(),
+  cpp: languageSpecSchema.optional(),
+  java: languageSpecSchema.optional(),
 });
 
 export const execSpecSchema = z.object({

@@ -135,7 +135,7 @@ companies so pre-auth data is not lost.
 
 ## CodePad
 
-The CodePad currently runs **Python 3**. It supports two modes:
+The CodePad runs **Python 3, C++ 20, and Java 21**. It supports two modes:
 
 - **Checked mode** runs the submitted function against a server-side test harness
   and shows each expected and actual result.
@@ -158,16 +158,16 @@ added.
 The execution target is chosen automatically:
 
 - **On Vercel**: each run happens in an isolated **Vercel Sandbox** microVM
-  (Firecracker) whose image includes Python 3. The Vercel serverless runtime has
-  no system Python, so this is the only way the CodePad works there. The sandbox
-  is created per run, has network egress denied, and is stopped immediately afterward.
-- **Everywhere else**: the runner spawns the local `python3` with a temporary
+  (Firecracker). Python uses the default image; C++ and Java require a prepared
+  toolchain snapshot. The sandbox is created per run, has network egress denied,
+  and is stopped immediately afterward.
+- **Everywhere else**: the runner spawns the local language toolchain with a temporary
   working directory, a minimal environment, output limits, and a wall-clock
   timeout. That is **process-level containment, not a security sandbox** —
   submitted code runs with the server user's operating-system permissions, so
   keep it local or put it behind authentication.
 
-Both paths run the identical program (see `buildPythonProgram`) and grade through
+Both paths run the identical language-specific program builders and grade through
 the same results-file protocol, so pass/fail behaviour does not depend on where
 it ran.
 
@@ -181,9 +181,16 @@ MAX_RUN_OUTPUT_CHARS=64000    # per stream; allowed range: 2000–500000
 ```
 
 On Vercel, set `CODE_EXECUTION_ENABLED=true` in the project's environment
-variables to turn the CodePad on. No Python install or extra secret is needed:
-the Sandbox SDK authenticates with the project's Vercel OIDC token, which
-production provides automatically.
+variables to turn the CodePad on. The Sandbox SDK authenticates with the
+project's Vercel OIDC token, which production provides automatically. For C++
+and Java, create a toolchain snapshot once and set its printed ID as
+`SANDBOX_TOOLCHAIN_SNAPSHOT_ID`:
+```bash
+node scripts/build-toolchain-snapshot.mjs
+```
+The provisioning sandbox temporarily permits package-download egress only while
+it installs `g++` and `default-jdk-headless`; normal CodePad sandboxes remain
+network-denied.
 
 `POST /api/questions/:id/run` also limits submitted code to 100 KB. The
 `GET /api/status` response reports whether execution is enabled and which
@@ -194,8 +201,7 @@ Live interview research uses OpenAI web search and adds search/tool cost to
 generation. Set `OPENAI_WEB_RESEARCH=false` to disable it, or use
 `QUESTION_PROVIDER=curated` for a completely offline generator.
 
-Only Python is registered today. C++ is intentionally deferred until a working
-compiler toolchain is available. To add a language later, implement a
+To add another language later, implement a
 `LanguageRuntime` in `src/lib/exec/`, register it in `src/lib/exec/runner.ts`,
 add its schema metadata in `src/lib/exec/types.ts`, and provide language-specific
 starters and harnesses in `src/lib/practice/specs.ts`.
