@@ -23,6 +23,17 @@ export async function POST(request: Request) {
       select: { id: true, email: true },
     });
     await createSession(user.id);
+
+    // Companies created before accounts existed have no owner. The first
+    // registered account adopts them so pre-auth data is not lost.
+    const userCount = await prisma.user.count();
+    if (userCount === 1) {
+      await prisma.company.updateMany({
+        where: { userId: null },
+        data: { userId: user.id },
+      });
+    }
+
     return NextResponse.json({ user }, { status: 201 });
   } catch (error) {
     if (

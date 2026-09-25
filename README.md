@@ -129,6 +129,10 @@ generation, status, delete, and CodePad APIs enforce the current session and
 filter through the owning user. Company names are unique per account, not
 globally. A password must be at least 12 characters.
 
+Companies created before accounts existed have no owner and are invisible to
+everyone until the first account registers; that account adopts all ownerless
+companies so pre-auth data is not lost.
+
 ## CodePad
 
 The CodePad currently runs **Python 3**. It supports two modes:

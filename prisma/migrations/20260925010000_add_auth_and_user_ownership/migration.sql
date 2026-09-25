@@ -20,7 +20,9 @@ CREATE TABLE "Session" (
 );
 
 -- AlterTable
-ALTER TABLE "companies" ADD COLUMN "userId" TEXT NOT NULL;
+-- Nullable on purpose: rows created before accounts existed stay ownerless and
+-- are adopted by the first registered account (see POST /api/auth/register).
+ALTER TABLE "companies" ADD COLUMN "userId" TEXT;
 
 -- CreateIndex
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");

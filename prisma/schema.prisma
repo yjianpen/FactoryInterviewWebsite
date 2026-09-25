@@ -44,8 +44,10 @@ model Session {
 /// A company the user applied to (or plans to prep for). One user => one question set.
 model Company {
   id        String     @id @default(cuid())
-  userId    String
-  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Nullable so companies created before accounts existed can be adopted by
+  /// the first registered account. Ownerless rows are invisible to everyone.
+  userId    String?
+  user      User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
   name      String
   role      String? // the job title you applied for
   stage     String     @default("APPLIED")
