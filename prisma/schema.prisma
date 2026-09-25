@@ -1,14 +1,13 @@
-// Interview Prep – Prisma schema (SQLite now, Postgres later).
-// To move to Postgres for production: change `provider` to "postgresql",
-// update DATABASE_URL in .env, and optionally reintroduce enums
-// (SQLite has no enum support, so we use String + app-level constants).
+// Interview Prep – PostgreSQL-backed production schema.
+// SQLite migrations are retained under prisma/migrations-sqlite for local
+// history, but deployed and current local data use PostgreSQL.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 

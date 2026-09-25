@@ -20,11 +20,12 @@ can genuinely practice first. Track your progress per question
 ## Quick start
 
 Requirements: Node 18.17+ (this repo is pinned to Next.js 14 / Prisma 5 on purpose).
+Set `DATABASE_URL` to a PostgreSQL database before running migrations.
 
 ```bash
 cd interview-prep
 npm install
-npm run db:migrate          # create & migrate the SQLite database (prisma/dev.db)
+npm run db:migrate          # apply PostgreSQL migrations
 cp .env.example .env        # only if .env is missing
 npm run dev                 # http://localhost:3000
 ```
@@ -92,7 +93,7 @@ src/
     prisma.ts / dto.ts / uiMeta.ts
     exec/                       # runtime detection, process limits, and runners
     practice/specs.ts           # checked Python starters and test harnesses
-prisma/schema.prisma             # Company, Question, TestCase
+prisma/schema.prisma             # PostgreSQL Company, Question, TestCase
 ```
 
 ## How it works
@@ -191,11 +192,12 @@ The four categories appear automatically (empty categories are simply hidden).
 All routes live under `src/app/api/` with zod validation at the boundary; models
 live in `prisma/schema.prisma` (run `npm run db:migrate` after schema changes).
 
-### Move SQLite → Postgres (later)
-Change `provider = "sqlite"` to `"postgresql"` in `prisma/schema.prisma` and set
-`DATABASE_URL` to the Postgres connection string. Because all enum values are
-stored as strings (SQLite has no enums), this migrates cleanly — no code changes
-needed beyond those two steps.
+### Database
+
+The app now uses PostgreSQL for local and hosted runs. Neon/Vercel Postgres is
+recommended. Set `DATABASE_URL`, then run `npm run db:migrate`. The old SQLite
+development migrations are retained under `prisma/migrations-sqlite/` for history;
+the active PostgreSQL baseline is under `prisma/migrations/`.
 
 ## Security & deployment notes (for when you put this on a domain)
 
@@ -220,8 +222,8 @@ Current posture: **local single-user app**. Before exposing it publicly:
   14.x), which needs only Node 18.17. The audit currently reports known Next.js
   advisories. For a public deployment on current runtime, upgrade Next to the
   latest 15/16 line first (needs Node 20+), then re-run `npm audit`.
-- **Database backup**: SQLite = one file; back up `prisma/dev.db` (or move to
-  Postgres and use managed backups).
+- **Database backup**: use the managed backup and branching tools provided by
+  Neon/Vercel Postgres.
 - **Error handling**: API routes return sanitized messages; in production set
   `NODE_ENV=production` and revisit `src/lib/prisma.ts` logging.
 
@@ -233,8 +235,8 @@ npm run build        # production build
 npm run start        # serve production build
 npm run typecheck    # tsc --noEmit
 npm run lint         # next lint
-npm run db:migrate   # apply schema changes (keeps migrations committed)
-npm run db:studio    # browse the SQLite DB in Prisma Studio
+npm run db:migrate   # apply PostgreSQL schema changes
+npm run db:studio    # browse the configured PostgreSQL database
 npm run verify:practice # exercise checked harnesses against a running app
 ```
 
