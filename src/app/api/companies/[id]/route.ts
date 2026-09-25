@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { toCompanyDto, toQuestionDto } from "@/lib/dto";
+import { getCurrentUser } from "@/lib/auth";
 
 // Per-company detail: GET (company + questions, no solutions), PATCH (edit), DELETE.
 
@@ -15,8 +16,11 @@ const updateCompanySchema = z.object({
 type Params = { params: { id: string } };
 
 export async function GET(_request: Request, { params }: Params) {
-  const company = await prisma.company.findUnique({
-    where: { id: params.id },
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+
+  const company = await prisma.company.findFirst({
+    where: { id: params.id, userId: user.id },
     include: {
       questions: {
         orderBy: [{ category: "asc" }, { sortOrder: "asc" }],
@@ -35,7 +39,12 @@ export async function GET(_request: Request, { params }: Params) {
 }
 
 export async function PATCH(request: Request, { params }: Params) {
-  const existing = await prisma.company.findUnique({ where: { id: params.id } });
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+
+  const existing = await prisma.company.findFirst({
+    where: { id: params.id, userId: user.id },
+  });
   if (!existing) {
     return NextResponse.json({ error: "Company not found." }, { status: 404 });
   }
@@ -61,14 +70,19 @@ export async function PATCH(request: Request, { params }: Params) {
     return NextResponse.json({ company: toCompanyDto(company) });
   } catch (error) {
     if (typeof error === "object" && error !== null && (error as { code?: string }).code === "P2002") {
-      return NextResponse.json({ error: "Another company already uses that name." }, { status: 409 });
+      return NextResponse.json({ error: "Another company in your account already uses that name." }, { status: 409 });
     }
     throw error;
   }
 }
 
 export async function DELETE(_request: Request, { params }: Params) {
-  const existing = await prisma.company.findUnique({ where: { id: params.id } });
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+
+  const existing = await prisma.company.findFirst({
+    where: { id: params.id, userId: user.id },
+  });
   if (!existing) {
     return NextResponse.json({ error: "Company not found." }, { status: 404 });
   }

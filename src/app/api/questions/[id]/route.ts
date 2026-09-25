@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { toQuestionDto } from "@/lib/dto";
+import { getCurrentUser } from "@/lib/auth";
 
 // Per-question endpoints:
 //  - GET    -> the full question INCLUDING the solution (reveal-on-demand)
@@ -14,8 +15,11 @@ const updateStatusSchema = z.object({
 type Params = { params: { id: string } };
 
 export async function GET(_request: Request, { params }: Params) {
-  const question = await prisma.question.findUnique({
-    where: { id: params.id },
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+
+  const question = await prisma.question.findFirst({
+    where: { id: params.id, company: { userId: user.id } },
     include: { testCases: { orderBy: { sortOrder: "asc" } } },
   });
   if (!question) {
@@ -28,7 +32,12 @@ export async function GET(_request: Request, { params }: Params) {
 }
 
 export async function PATCH(request: Request, { params }: Params) {
-  const existing = await prisma.question.findUnique({ where: { id: params.id } });
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+
+  const existing = await prisma.question.findFirst({
+    where: { id: params.id, company: { userId: user.id } },
+  });
   if (!existing) {
     return NextResponse.json({ error: "Question not found." }, { status: 404 });
   }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { toCompanyDto } from "@/lib/dto";
+import { getCurrentUser } from "@/lib/auth";
 
 // CRUD for companies (the list of companies you applied to).
 
@@ -13,7 +14,11 @@ const createCompanySchema = z.object({
 });
 
 export async function GET() {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+
   const companies = await prisma.company.findMany({
+    where: { userId: user.id },
     orderBy: [{ createdAt: "desc" }],
     include: {
       _count: { select: { questions: true } },
@@ -29,6 +34,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+
   const body = await request.json().catch(() => null);
   const parsed = createCompanySchema.safeParse(body);
   if (!parsed.success) {
@@ -40,6 +48,7 @@ export async function POST(request: Request) {
   try {
     const company = await prisma.company.create({
       data: {
+        userId: user.id,
         name,
         role: role ?? null,
         stage: stage ?? "APPLIED",
@@ -50,7 +59,7 @@ export async function POST(request: Request) {
   } catch (error) {
     // P2002: unique constraint on company name.
     if (typeof error === "object" && error !== null && (error as { code?: string }).code === "P2002") {
-      return NextResponse.json({ error: `A company named "${name}" already exists.` }, { status: 409 });
+      return NextResponse.json({ error: `A company named "${name}" already exists in your account.` }, { status: 409 });
     }
     throw error;
   }

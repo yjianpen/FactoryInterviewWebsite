@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AuthNav } from "@/components/AuthNav";
 
 export function SiteHeader({ backHref }: { backHref?: string }) {
   return (
@@ -23,6 +24,7 @@ export function SiteHeader({ backHref }: { backHref?: string }) {
         <span className="ml-auto hidden text-xs text-slate-500 sm:block">
           Company-specific questions, solutions on demand
         </span>
+        <AuthNav />
       </div>
     </header>
   );
